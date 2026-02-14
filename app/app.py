@@ -6,15 +6,18 @@ from qa import build_vector_store, ask_question
 from dotenv import load_dotenv
 load_dotenv()
 
-@st.cache_resource
-def load_db():
-    return build_vector_store()
-db = load_db()
+
 
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
+os.makedirs(VECTOR_FOLDER, exist_ok=True)
+
+@st.cache_resource
+def load_db():
+    return build_vector_store()
+db = load_db()
 
 st.set_page_config(page_title="Private Knowledge Q&A")
 st.title("Private Knowledge Q&A")

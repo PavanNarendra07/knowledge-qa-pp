@@ -14,8 +14,7 @@ VECTOR_FOLDER = "vectorstore"
 
 def build_vector_store():
     os.makedirs(DATA_FOLDER, exist_ok=True)
-    os.makedirs(VECTOR_FOLDER, exist_ok=True)
-    
+
     files = os.listdir(DATA_FOLDER)
     if not files:
         return None
