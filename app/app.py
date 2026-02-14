@@ -1,43 +1,28 @@
-import streamlit as st
+# ---- add at top ----
 import os
 import shutil
+import streamlit as st
 from qa import build_vector_store, ask_question
-
-from dotenv import load_dotenv
-load_dotenv()
-
-
 
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
-def clear_old_data():
-    # clear files
-    for f in os.listdir(DATA_FOLDER):
-        path = os.path.join(DATA_FOLDER, f)
-        if os.path.isfile(path):
-            os.remove(path)
-
-    # clear vectorstore safely
+# ---- clear data on fresh start ----
+if "init_done" not in st.session_state:
+    if os.path.exists(DATA_FOLDER):
+        shutil.rmtree(DATA_FOLDER, ignore_errors=True)
     if os.path.exists(VECTOR_FOLDER):
         shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
-clear_old_data()
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    st.session_state.init_done = True
 
-@st.cache_resource
-def load_db():
-    return build_vector_store()
-db = load_db()
-
+# ---- UI ----
 st.set_page_config(page_title="Private Knowledge Q&A")
 st.title("Private Knowledge Q&A")
-st.write("Upload documents and ask questions from them.")
 
-# ===============================
-# Upload Files
-# ===============================
 uploaded_files = st.file_uploader(
     "Upload text files",
     type=["txt"],
@@ -48,86 +33,37 @@ if uploaded_files:
     for file in uploaded_files:
         with open(os.path.join(DATA_FOLDER, file.name), "wb") as f:
             f.write(file.getbuffer())
+
     if os.path.exists(VECTOR_FOLDER):
         shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
-    st.cache_resource.clear()
+
     db = build_vector_store()
     st.success("Files uploaded successfully")
-    st.rerun()
-    
 
-# ===============================
-# Show Uploaded Files
-# ===============================
 st.subheader("Uploaded Documents")
-import time
-
-def safe_delete_vectorstore():
-    if os.path.exists(VECTOR_FOLDER):
-        try:
-            shutil.rmtree(VECTOR_FOLDER)
-        except PermissionError:
-            time.sleep(1)
-            shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
-
 files = os.listdir(DATA_FOLDER)
-selected_files = []
 
 if files:
-    for file in files:
-        col1, col2 = st.columns([5, 1])
-
-        # checkbox for multi delete
-        with col1:
-            if st.checkbox(file, key=file):
-                selected_files.append(file)
-
-        # delete icon for single delete
-        with col2:
-            if st.button("🗑️", key="del_" + file):
-                os.remove(os.path.join(DATA_FOLDER, file))
-
-                safe_delete_vectorstore()
-
-                build_vector_store()
-                st.rerun()
-
-    # delete multiple files
-    if selected_files:
-        if st.button("Delete Selected Files"):
-            for f in selected_files:
-                os.remove(os.path.join(DATA_FOLDER, f))
-
-            if os.path.exists(VECTOR_FOLDER):
-                shutil.rmtree(VECTOR_FOLDER)
-
-            build_vector_store()
-            st.success("Selected files deleted")
-            st.rerun()
-
+    for f in files:
+        st.write(f)
 else:
     st.write("No documents uploaded yet.")
 
-# ===============================
-# Ask Question
-# ===============================
 st.subheader("Ask a Question")
-
 question = st.text_input("Enter your question")
 
 if st.button("Get Answer"):
     if not os.listdir(DATA_FOLDER):
         st.warning("Upload documents first.")
     elif not question.strip():
-        st.warning("Please enter a question.")
+        st.warning("Enter a question.")
     else:
-        db = load_db() if os.listdir(DATA_FOLDER) else None
-        answer, sources = ask_question(question, db)
+        answer, sources = ask_question(question)
 
         st.subheader("Answer")
         st.write(answer)
 
         st.subheader("Sources")
         for src, text in sources:
-            st.write(f"**Document:** {src}")
+            st.write(f"Document: {src}")
             st.write(text)
