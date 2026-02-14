@@ -88,27 +88,26 @@ def ask_question(question, db):
     if not docs:
         return "No relevant information found.", []
 
-    # strong keyword filtering
     q_words = [w.lower() for w in question.split() if len(w) > 2]
 
-    valid_docs = []
+    best_doc = None
+    best_score = 0
+
     for d in docs:
         text = d.page_content.lower()
+        score = sum(1 for w in q_words if w in text)
 
-        # require most keywords to exist
-        matches = sum(1 for w in q_words if w in text)
+        if score > best_score:
+            best_score = score
+            best_doc = d
 
-        if matches >= max(1, len(q_words) - 1):
-            valid_docs.append(d)
-
-    if not valid_docs:
+    if best_doc is None or best_score == 0:
         return "No relevant information found.", []
 
-    # extract best sentence
-    for d in valid_docs:
-        sentence = best_sentence(d.page_content, question)
-        if sentence:
-            src = d.metadata.get("source", "Unknown")
-            return sentence, [(src, sentence)]
+    sentence = best_sentence(best_doc.page_content, question)
+
+    if sentence:
+        src = best_doc.metadata.get("source", "Unknown")
+        return sentence, [(src, sentence)]
 
     return "No relevant information found.", []
