@@ -45,40 +45,42 @@ def select_best_answer(docs, question):
     if not docs:
         return "No relevant information found."
 
-    answer_parts = []
+    q = question.lower()
 
-    for d in docs[:3]:
-        text = d.page_content.strip()
-        if text:
-            answer_parts.append(text[:200])
+    # prefer doc whose source matches query
+    for d in docs:
+        src = d.metadata.get("source", "").lower()
+        if any(word in src for word in q.split()):
+            return (d.page_content or "")[:250]
 
-    return "\n\n".join(answer_parts)
-
+    # fallback to first
+    return (docs[0].page_content or "")[:250]
 
 def ask_question(question, db):
     docs = db.similarity_search(question, k=5)
 
     response = select_best_answer(docs, question)
 
-    words = question.lower().split()
+    q_words = question.lower().split()
+
     sources = []
     seen = set()
 
     for d in docs:
-        text = d.page_content or ""
-        lower_text = text.lower()
+        src = d.metadata.get("source", "")
+        lower_src = src.lower()
 
-        if all(w in lower_text for w in words):
-            src = d.metadata.get("source", "unknown")
-
+        if any(w in lower_src for w in q_words):
             if src not in seen:
-                sources.append((src, text[:200]))
+                sources.append((src, (d.page_content or "")[:200]))
                 seen.add(src)
 
+    # fallback
     if not sources and docs:
         d = docs[0]
         sources.append(
-            (d.metadata.get("source", "unknown"), d.page_content[:200])
+            (d.metadata.get("source", "unknown"),
+             (d.page_content or "")[:200])
         )
 
     return response, sources
