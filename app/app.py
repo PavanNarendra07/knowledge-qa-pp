@@ -5,8 +5,8 @@ from qa import build_vector_store, ask_question
 
 @st.cache_resource(show_spinner=False)
 def load_db():
-    db = build_vector_store()
-    return db
+    return build_vector_store()
+   
 
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
@@ -43,8 +43,8 @@ if uploaded_files:
     if os.path.exists(VECTOR_FOLDER):
         shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
-    with st.spinner("Updating knowledge base..."):
-        st.cache_resource.clear()
+    st.cache_resource.clear()
+    with st.spinner("Updating knowledge base..."): 
         load_db()
     st.success("Files uploaded successfully")
 
