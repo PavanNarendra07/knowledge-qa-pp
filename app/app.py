@@ -1,4 +1,3 @@
-# ---- add at top ----
 import os
 import shutil
 import streamlit as st
@@ -14,7 +13,7 @@ VECTOR_FOLDER = "vectorstore"
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
-# ---- clear data on fresh start ----
+
 if "init_done" not in st.session_state:
     if os.path.exists(DATA_FOLDER):
         shutil.rmtree(DATA_FOLDER, ignore_errors=True)
@@ -24,7 +23,6 @@ if "init_done" not in st.session_state:
     os.makedirs(DATA_FOLDER, exist_ok=True)
     st.session_state.init_done = True
 
-# ---- UI ----
 st.set_page_config(page_title="Private Knowledge Q&A")
 st.title("Private Knowledge Q&A")
 
@@ -59,12 +57,15 @@ if files:
         if col2.button("❌", key=f):
             os.remove(os.path.join(DATA_FOLDER, f))
 
-            # rebuild store after delete
             if os.path.exists(VECTOR_FOLDER):
                 shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
             st.cache_resource.clear()
-            load_db()
+            if os.listdir(DATA_FOLDER):
+                load_db()
+            
+            st.session_state("last_answer", None)
+            st.session_state("last_sources", None)
             st.rerun()
 else:
     st.write("No documents uploaded yet.")
@@ -86,11 +87,15 @@ if st.button("Get Answer"):
             st.error("Vector store not built.")
         else:
             answer, sources = ask_question(question, db)
+            st.session_state["last_answer"] =  answer
+            st.session_state["last_sources"] = sources 
+            
+            if "last_answer" in st.session_state:
+                st.subheader("Answer")
+                st.write(st.session_state["last_answer"])
 
-            st.subheader("Answer")
-            st.write(answer)
-
-            st.subheader("Sources")
-            for src, text in sources:
-                st.write(f"Document: {src}")
-                st.write(text)
+                st.subheader("Sources")
+           
+                for src, text in st.session_state["last_sources"]:
+                    st.write(f"Document: {src}")
+                    st.write(text)
