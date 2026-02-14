@@ -53,7 +53,7 @@ files = os.listdir(DATA_FOLDER)
 
 if files:
     for f in files:
-        col1, col2 = st.coloumns([8,1])
+        col1, col2 = st.columns([8,1])
         col1.write(f)
 
         if col2.button("❌", key=f):
@@ -64,11 +64,11 @@ if files:
                 shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
             st.cache_resource.clear()
-
+            load_db()
             st.rerun()
 else:
     st.write("No documents uploaded yet.")
-    
+
 
 st.subheader("Ask a Question")
 question = st.text_input("Enter your question")
