@@ -90,11 +90,8 @@ def ask_question(question, db):
     if not docs:
         return "No relevant information found.", []
 
+    # keep important words only
     q_words = [w for w in question_lower.split() if len(w) > 2]
-
-    best_sentence_result = None
-    best_score = 0
-    best_source = None
 
     for d in docs:
         sentences = re.split(r'(?<=[.!?])\s+', d.page_content)
@@ -102,14 +99,9 @@ def ask_question(question, db):
         for s in sentences:
             s_low = s.lower()
 
-            score = sum(1 for w in q_words if w in s_low)
-
-            if score > best_score:
-                best_score = score
-                best_sentence_result = s.strip()
-                best_source = d.metadata.get("source", "Unknown")
-
-    if best_sentence_result and best_score > 0:
-        return best_sentence_result, [(best_source, best_sentence_result)]
+            # require ALL words present
+            if all(w in s_low for w in q_words):
+                src = d.metadata.get("source", "Unknown")
+                return s.strip(), [(src, s.strip())]
 
     return "No relevant information found.", []
