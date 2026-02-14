@@ -38,8 +38,7 @@ def build_vector_store():
     return db
 
 def load_vector_store():
-    embeddings = HuggingFaceEmbeddings(model_name= "sentence-transformers/all-MiniLM-L6-v2")
-    return FAISS.load_local(VECTOR_FOLDER, embeddings, allow_dangerous_deserialization=True)
+    return build_vector_store()
 
 def select_best_answer(docs, question):
     if not docs:
