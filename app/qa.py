@@ -56,42 +56,51 @@ def clean_text(text):
     # remove wiki refs like [1], [2]
     return re.sub(r"\[\d+\]", "", text)
 
-
 def best_sentence(text, question):
     text = clean_text(text)
     sentences = re.split(r'(?<=[.!?])\s+', text)
 
     q_words = question.lower().split()
 
-    scored = []
+    best = None
+    best_score = 0
 
     for s in sentences:
         s_lower = s.lower()
+
         score = sum(1 for w in q_words if w in s_lower)
 
-        if score > 0:
-            scored.append((score, len(s), s))
+        # boost fact sentences
+        if any(k in s_lower for k in ["born", "founded", "created", "located", "date"]):
+            score += 3
 
-    if not scored:
-        return None
+        if score > best_score:
+            best_score = score
+            best = s
 
-    # highest keyword match, shortest sentence
-    scored.sort(key=lambda x: (-x[0], x[1]))
-
-    return scored[0][2].strip()
+    return best.strip() if best else None
 
 
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=4)
+    docs = db.similarity_search(question, k=5)
 
     if not docs:
         return "No relevant information found.", []
+
+    best_answer = None
+    best_source = None
 
     for d in docs:
         sentence = best_sentence(d.page_content, question)
 
         if sentence:
-            src = d.metadata.get("source", "Unknown")
-            return sentence, [(src, sentence)]
+            best_answer = sentence
+            best_source = d.metadata.get("source", "Unknown")
 
-    return "No relevant information found.", []
+            if "born" in question.lower() and "born" in sentence.lower():
+                break
+
+    if not best_answer:
+        return "No relevant information found.", []
+
+    return best_answer, [(best_source, best_answer)]
