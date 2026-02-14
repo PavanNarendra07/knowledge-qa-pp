@@ -23,13 +23,14 @@ if "init_done" not in st.session_state:
     os.makedirs(DATA_FOLDER, exist_ok=True)
     st.session_state.init_done = True
 
+
 st.set_page_config(page_title="Private Knowledge Q&A")
 st.title("Private Knowledge Q&A")
 
 uploaded_files = st.file_uploader(
     "Upload text files",
     type=["txt"],
-    accept_multiple_files=True, label_visibility="collapsed"
+    accept_multiple_files=True
 )
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
@@ -43,9 +44,8 @@ if uploaded_files:
         shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
     st.cache_resource.clear()
-
+    db = load_db()
     st.success("Files uploaded successfully")
-    st.rerun()
 
 st.subheader("Uploaded Documents")
 files = os.listdir(DATA_FOLDER)
@@ -58,10 +58,12 @@ if files:
         if col2.button("❌", key=f):
             os.remove(os.path.join(DATA_FOLDER, f))
 
+            # rebuild store after delete
             if os.path.exists(VECTOR_FOLDER):
                 shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
             st.cache_resource.clear()
+            load_db()
             st.rerun()
 else:
     st.write("No documents uploaded yet.")
@@ -83,15 +85,11 @@ if st.button("Get Answer"):
             st.error("Vector store not built.")
         else:
             answer, sources = ask_question(question, db)
-            st.session_state["last_answer"] =  answer
-            st.session_state["last_sources"] = sources 
-            
-            if "last_answer" in st.session_state:
-                st.subheader("Answer")
-                st.write(st.session_state["last_answer"])
 
-                st.subheader("Sources")
-           
-                for src, text in st.session_state["last_sources"]:
-                    st.write(f"Document: {src}")
-                    st.write(text)
+            st.subheader("Answer")
+            st.write(answer)
+
+            st.subheader("Sources")
+            for src, text in sources:
+                st.write(f"Document: {src}")
+                st.write(text)
