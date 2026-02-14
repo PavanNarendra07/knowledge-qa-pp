@@ -55,60 +55,49 @@ def select_best_answer(docs, question):
     # fallback to first
     return (docs[0].page_content or "")[:250]
 
-
-def clean_text(s):
-    # remove wikipedia refs [1][2]
-    return re.sub(r"\[\d+\]", "", s).strip()
+import re
 
 
-def extract_best_sentence(text, question):
+def clean_text(text):
+    # remove wiki refs like [1], [2]
+    return re.sub(r"\[\d+\]", "", text)
+
+
+def best_sentence(text, question):
+    text = clean_text(text)
     sentences = re.split(r'(?<=[.!?])\s+', text)
-    q = question.lower()
 
-    # --- birth question strict match ---
-    if "born" in q or "birth" in q:
-        for s in sentences:
-            if "born" in s.lower():
-                s = clean_text(s)
+    q_words = question.lower().split()
 
-                # cut text after birth info if extra text continues
-                match = re.search(r'.*born[^.]*\.', s, re.IGNORECASE)
-                if match:
-                    return match.group(0).strip()
-
-                return s.strip()
-
-    # --- generic keyword match ---
-    words = q.split()
-    best = None
-    best_score = 0
+    scored = []
 
     for s in sentences:
-        low = s.lower()
-        score = sum(1 for w in words if w in low)
+        s_lower = s.lower()
+        score = sum(1 for w in q_words if w in s_lower)
 
-        if score > best_score:
-            best_score = score
-            best = s
+        if score > 0:
+            scored.append((score, len(s), s))
 
-    if best:
-        return clean_text(best)
+    if not scored:
+        return None
 
-    return None
+    # highest keyword match, shortest sentence
+    scored.sort(key=lambda x: (-x[0], x[1]))
+
+    return scored[0][2].strip()
 
 
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=3)
+    docs = db.similarity_search(question, k=4)
 
     if not docs:
         return "No relevant information found.", []
 
     for d in docs:
-        text = d.page_content
-        source = d.metadata.get("source", "Unknown")
+        sentence = best_sentence(d.page_content, question)
 
-        answer = extract_best_sentence(text, question)
-        if answer:
-            return answer, [(source, answer)]
+        if sentence:
+            src = d.metadata.get("source", "Unknown")
+            return sentence, [(src, sentence)]
 
     return "No relevant information found.", []
