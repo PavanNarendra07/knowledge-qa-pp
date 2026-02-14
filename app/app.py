@@ -29,7 +29,7 @@ st.title("Private Knowledge Q&A")
 uploaded_files = st.file_uploader(
     "Upload text files",
     type=["txt"],
-    accept_multiple_files=True
+    accept_multiple_files=True, label_visibility="collapsed"
 )
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
@@ -43,8 +43,9 @@ if uploaded_files:
         shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
     st.cache_resource.clear()
-    db = load_db()
+
     st.success("Files uploaded successfully")
+    st.rerun()
 
 st.subheader("Uploaded Documents")
 files = os.listdir(DATA_FOLDER)
@@ -61,11 +62,6 @@ if files:
                 shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
             st.cache_resource.clear()
-            if os.listdir(DATA_FOLDER):
-                load_db()
-            
-            st.session_state("last_answer", None)
-            st.session_state("last_sources", None)
             st.rerun()
 else:
     st.write("No documents uploaded yet.")
