@@ -4,3 +4,4 @@ langchain-community==0.0.29
 sentence-transformers==2.6.1
 faiss-cpu
 python-dotenv==1.0.1
+torch==2.2.2

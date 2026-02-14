@@ -31,7 +31,9 @@ def build_vector_store():
         return None
     splitter = CharacterTextSplitter(chunk_size= 300, chunk_overlap = 30, separator="\n")
     docs = splitter.create_documents(texts, metadatas = metadata)
-    embeddings =  HuggingFaceEmbeddings(model_name= "sentence-transformers/all-MiniLM-L6-v2")
+    embeddings =  HuggingFaceEmbeddings(model_name= "sentence-transformers/all-MiniLM-L6-v2", 
+                                        model_kwargs={"device":"cpu"} ,
+                                        encode_kwargs={"normalize_embeddings": True})
     db = FAISS.from_documents(docs,embeddings)
     db.save_local(VECTOR_FOLDER)
 
