@@ -44,7 +44,8 @@ if uploaded_files:
         shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
     st.cache_resource.clear()
-    db = load_db()
+    with st.spinner("Rebuilding knowledge base..."):
+        db = load_db()
     st.success("Files uploaded successfully")
 
 st.subheader("Uploaded Documents")
@@ -63,7 +64,8 @@ if files:
                 shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
             st.cache_resource.clear()
-            load_db()
+            with st.spinner("Rebuilding knowledge base..."):
+                db = load_db()
             st.rerun()
 else:
     st.write("No documents uploaded yet.")
@@ -80,7 +82,8 @@ if st.button("Get Answer"):
     elif not question.strip():
         st.warning("Enter a question.")
     else:
-        db = load_db()
+        with st.spinner("Rebuilding knowledge base..."):
+            db = load_db()
         if db is None:
             st.error("Vector store not built.")
         else:
