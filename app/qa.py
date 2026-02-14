@@ -1,5 +1,6 @@
 import os
-from langchain.text_splitter import CharacterTextSplitter
+import re
+from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
@@ -7,7 +8,7 @@ DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
 
-# ---------- Read file ----------
+# ---------- Read files ----------
 def read_file(path):
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         return f.read()
@@ -51,7 +52,26 @@ def build_vector_store():
     return db
 
 
-# ---------- Pick best answer ----------
+# ---------- Clean best sentence ----------
+def best_sentence(text, question):
+    sentences = re.split(r'(?<=[.!?]) +', text)
+    q_words = question.lower().split()
+
+    best_score = 0
+    best_line = sentences[0]
+
+    for s in sentences:
+        s_low = s.lower()
+        score = sum(word in s_low for word in q_words)
+
+        if score > best_score:
+            best_score = score
+            best_line = s
+
+    return best_line.strip()
+
+
+# ---------- Select best answer ----------
 def select_best_answer(docs, question):
     if not docs:
         return "No relevant information found.", []
@@ -59,41 +79,24 @@ def select_best_answer(docs, question):
     q_words = question.lower().split()
 
     scored_docs = []
-
     for d in docs:
-        text = d.page_content
-        score = sum(word in text.lower() for word in q_words)
+        text = d.page_content.lower()
+        score = sum(word in text for word in q_words)
         scored_docs.append((score, d))
 
     scored_docs.sort(key=lambda x: x[0], reverse=True)
 
-    best_docs = [d for score, d in scored_docs if score > 0]
-
-    if not best_docs:
-        best_docs = docs[:1]
-
-    best_doc = best_docs[0]
-    text = best_doc.page_content
-
-    # try to return only most relevant sentence
-    sentences = text.split(".")
-    for s in sentences:
-        if any(word in s.lower() for word in q_words):
-            answer = s.strip()
-            if answer:
-                break
-    else:
-        answer = text[:250]
-
-    answer = answer.strip() + "."
+    best_doc = scored_docs[0][1]
+    answer_line = best_sentence(best_doc.page_content, question)
 
     sources = []
-    for d in best_docs[:2]:
+    for score, d in scored_docs[:2]:
         sources.append(
-            (d.metadata.get("source", "Unknown"), d.page_content[:250])
+            (d.metadata.get("source", "Unknown"),
+             d.page_content[:250])
         )
 
-    return answer, sources
+    return answer_line, sources
 
 
 # ---------- Ask Question ----------
@@ -102,7 +105,6 @@ def ask_question(question, db):
         return "No documents available.", []
 
     docs = db.similarity_search(question, k=4)
-
     answer, sources = select_best_answer(docs, question)
 
     return answer, sources
