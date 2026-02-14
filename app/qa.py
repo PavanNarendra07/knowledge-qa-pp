@@ -60,19 +60,22 @@ def best_sentence(text, question):
     text = clean_text(text)
     sentences = re.split(r'(?<=[.!?])\s+', text)
 
-    q_words = question.lower().split()
+    q_lower = question.lower()
 
+    # Hard rule for birth questions
+    if "born" in q_lower:
+        for s in sentences:
+            if "born" in s.lower():
+                return s.strip()
+
+    # fallback scoring
+    q_words = q_lower.split()
     best = None
     best_score = 0
 
     for s in sentences:
         s_lower = s.lower()
-
         score = sum(1 for w in q_words if w in s_lower)
-
-        # boost fact sentences
-        if any(k in s_lower for k in ["born", "founded", "created", "located", "date"]):
-            score += 3
 
         if score > best_score:
             best_score = score
@@ -82,25 +85,16 @@ def best_sentence(text, question):
 
 
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=5)
+    docs = db.similarity_search(question, k=6)
 
     if not docs:
         return "No relevant information found.", []
-
-    best_answer = None
-    best_source = None
 
     for d in docs:
         sentence = best_sentence(d.page_content, question)
 
         if sentence:
-            best_answer = sentence
-            best_source = d.metadata.get("source", "Unknown")
+            src = d.metadata.get("source", "Unknown")
+            return sentence, [(src, sentence)]
 
-            if "born" in question.lower() and "born" in sentence.lower():
-                break
-
-    if not best_answer:
-        return "No relevant information found.", []
-
-    return best_answer, [(best_source, best_answer)]
+    return "No relevant information found.", []
