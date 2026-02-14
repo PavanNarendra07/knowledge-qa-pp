@@ -1,98 +1,92 @@
 import os
-import shutil
-import streamlit as st
-from qa import build_vector_store, ask_question
+from utils import read_file
 
-@st.cache_resource(show_spinner=False)
-def load_db():
-    db = build_vector_store()
-    return db
+from langchain_text_splitters import CharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
-os.makedirs(DATA_FOLDER, exist_ok=True)
+
+def get_embeddings():
+    return HuggingFaceEmbeddings(
+        model_name="all-MiniLM-L6-v2"
+    )
 
 
-if "init_done" not in st.session_state:
-    if os.path.exists(DATA_FOLDER):
-        shutil.rmtree(DATA_FOLDER, ignore_errors=True)
-    if os.path.exists(VECTOR_FOLDER):
-        shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+def build_vector_store():
+    texts = []
+    metadata = []
 
-    os.makedirs(DATA_FOLDER, exist_ok=True)
-    st.session_state.init_done = True
+    if not os.path.exists(DATA_FOLDER):
+        return None
 
+    for file in os.listdir(DATA_FOLDER):
+        path = os.path.join(DATA_FOLDER, file)
 
-st.set_page_config(page_title="Private Knowledge Q&A")
-st.title("📚 Private Knowledge Q&A")
+        content = read_file(path)
 
-uploaded_files = st.file_uploader(
-    "Upload text files",
-    type=["txt"],
-    accept_multiple_files=True
-)
+        if content and content.strip():
+            texts.append(content)
+            metadata.append({"source": file})
 
-os.makedirs(DATA_FOLDER, exist_ok=True)
+    if not texts:
+        return None
 
-if uploaded_files:
-    for file in uploaded_files:
-        with open(os.path.join(DATA_FOLDER, file.name), "wb") as f:
-            f.write(file.getbuffer())
+    splitter = CharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50
+    )
 
-    if os.path.exists(VECTOR_FOLDER):
-        shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+    docs = splitter.create_documents(
+        texts,
+        metadatas=metadata
+    )
 
-    with st.spinner("Updating knowledge base..."):
-        st.cache_resource.clear()
-        load_db()
-    st.success("Files uploaded successfully")
+    embeddings = get_embeddings()
 
-st.subheader("Uploaded Documents")
-files = os.listdir(DATA_FOLDER)
+    db = FAISS.from_documents(docs, embeddings)
+    db.save_local(VECTOR_FOLDER)
 
-if files:
-    for f in files:
-        col1, col2 = st.columns([8,1])
-        col1.write(f)
-
-        if col2.button("❌", key=f):
-            os.remove(os.path.join(DATA_FOLDER, f))
-
-            # rebuild store after delete
-            if os.path.exists(VECTOR_FOLDER):
-                shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
-
-            with st.spinner("Updating knowledge base..."):
-                st.cache_resource.clear()
-                load_db()
-            st.rerun()
-else:
-    st.write("No documents uploaded yet.")
+    return db
 
 
-st.subheader("Ask a Question")
-question = st.text_input("Enter your question")
+def load_vector_store():
+    embeddings = get_embeddings()
+
+    return FAISS.load_local(
+        VECTOR_FOLDER,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
 
 
-if st.button("Get Answer"):
-    
-    if not os.listdir(DATA_FOLDER):
-        st.warning("Upload documents first.")
-    elif not question.strip():
-        st.warning("Enter a question.")
-    else:
-        with st.spinner("Generating answer..."):
-            db = load_db()
+def ask_question(question):
+    if not question.strip():
+        return "Please enter a valid question.", []
+
+    # Build store if missing
+    if not os.path.exists(VECTOR_FOLDER):
+        db = build_vector_store()
         if db is None:
-            st.error("Vector store not built.")
-        else:
-            answer, sources = ask_question(question, db)
+            return "No documents available. Please upload documents first.", []
+    else:
+        db = load_vector_store()
 
-            st.subheader("Answer")
-            st.write(answer)
+    docs = db.similarity_search(question, k=2)
 
-            st.subheader("Sources")
-            for src, text in sources:
-                st.write(f"Document: {src}")
-                st.write(text)
+    if not docs:
+        return "No relevant information found.", []
+
+    context = "\n".join([d.page_content for d in docs])
+
+    # Basic retrieval answer
+    response = context[:1000]
+
+    sources = [
+        (d.metadata.get("source", "Unknown"), d.page_content[:200])
+        for d in docs
+    ]
+
+    return response, sources
