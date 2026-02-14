@@ -1,3 +1,32 @@
+import os
+import shutil
+import streamlit as st
+from qa import build_vector_store, ask_question
+
+@st.cache_resource
+def load_db():
+    db = build_vector_store()
+    return db
+
+DATA_FOLDER = "data"
+VECTOR_FOLDER = "vectorstore"
+
+os.makedirs(DATA_FOLDER, exist_ok=True)
+
+
+if "init_done" not in st.session_state:
+    if os.path.exists(DATA_FOLDER):
+        shutil.rmtree(DATA_FOLDER, ignore_errors=True)
+    if os.path.exists(VECTOR_FOLDER):
+        shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    st.session_state.init_done = True
+
+
+st.set_page_config(page_title="Private Knowledge Q&A")
+st.title("Private Knowledge Q&A")
+
 # ---- add at top ----
 import os
 import shutil
