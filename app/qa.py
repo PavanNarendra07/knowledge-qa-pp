@@ -1,112 +1,77 @@
 import os
 import re
-from langchain_text_splitters import CharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import FakeEmbeddings
-
-
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 DATA_FOLDER = "data"
-VECTOR_FOLDER = "vectorstore"
+
+vectorizer = None
+sentences = []
+sources = []
 
 
-# ---------- Read files ----------
-def read_file(path):
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        return f.read()
-
-
-# ---------- Build Vector Store ----------
-def build_vector_store():
-    files = os.listdir(DATA_FOLDER)
-
-    texts = []
-    metadata = []
-
-    for file in files:
-        path = os.path.join(DATA_FOLDER, file)
-        content = read_file(path)
-
-        if content.strip():
-            texts.append(content)
-            metadata.append({"source": file})
-
-    if not texts:
-        return None
-
-    splitter = CharacterTextSplitter(
-        chunk_size=300,
-        chunk_overlap=40,
-        separator="\n"
-    )
-
-    docs = splitter.create_documents(texts, metadatas=metadata)
-
-    embeddings = FakeEmbeddings(size=384)
-    db = FAISS.from_documents(docs, embeddings)
-    db.save_local(VECTOR_FOLDER)
-
-    return db
-
-
-import re
-
+# ---------- Clean text ----------
 def clean_text(text):
-    return re.sub(r"\[\d+\]", "", text)
+    text = re.sub(r"\[\d+\]", "", text)
+    return text
 
 
-def best_sentence(text, question):
+# ---------- Sentence splitting ----------
+def split_sentences(text):
     text = clean_text(text)
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    return re.split(r'(?<=[.!?])\s+', text)
 
-    q_words = question.lower().split()
-    main_term = q_words[0] if q_words else ""
 
-    candidates = []
+# ---------- Build index ----------
+def build_vector_store():
+    global vectorizer, sentences, sources
 
-    for s in sentences:
-        s_lower = s.lower()
+    sentences = []
+    sources = []
 
-        # must contain main entity
-        if main_term not in s_lower:
-            continue
-
-        score = sum(1 for w in q_words if w in s_lower)
-
-        if score > 0:
-            candidates.append((score, len(s), s))
-
-    if not candidates:
+    if not os.path.exists(DATA_FOLDER):
         return None
 
-    candidates.sort(key=lambda x: (-x[0], x[1]))
-    return candidates[0][2].strip()
+    for file in os.listdir(DATA_FOLDER):
+        path = os.path.join(DATA_FOLDER, file)
 
-def ask_question(question, db):
-    docs = db.similarity_search(question, k=10)
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            text = f.read()
 
-    if not docs:
+        sents = split_sentences(text)
+
+        for s in sents:
+            s = s.strip()
+            if len(s) > 20:
+                sentences.append(s)
+                sources.append(file)
+
+    if not sentences:
+        return None
+
+    vectorizer = TfidfVectorizer(stop_words="english")
+    vectorizer.fit(sentences)
+
+    return True
+
+
+# ---------- Ask question ----------
+def ask_question(question, db=None):
+    global vectorizer, sentences, sources
+
+    if not sentences:
         return "No relevant information found.", []
 
-    stop_words = {"when", "what", "who", "is", "was", "the", "a", "an"}
-    q_words = [w.lower() for w in question.split() if w.lower() not in stop_words]
+    q_vec = vectorizer.transform([question])
+    s_vec = vectorizer.transform(sentences)
 
-    # handle born/birth variation
-    variants = set(q_words)
-    if "born" in variants:
-        variants.add("birth")
-    if "birth" in variants:
-        variants.add("born")
+    scores = cosine_similarity(q_vec, s_vec)[0]
+    best_idx = scores.argmax()
 
-    for d in docs:
-        sentences = re.split(r'(?<=[.!?])\s+', d.page_content)
+    if scores[best_idx] < 0.1:
+        return "No relevant information found.", []
 
-        for s in sentences:
-            s_low = s.lower()
+    answer = sentences[best_idx]
+    src = sources[best_idx]
 
-            # require name match + born/birth
-            if all(w in s_low for w in variants if len(w) > 3):
-                src = d.metadata.get("source", "Unknown")
-                return s.strip(), [(src, s.strip())]
-
-    return "No relevant information found.", []
+    return answer, [(src, answer)]
