@@ -13,8 +13,9 @@ DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
 def build_vector_store():
-    if not os.path.exists(DATA_FOLDER):
-        return None
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    os.makedirs(VECTOR_FOLDER, exist_ok=True)
+    
     files = os.listdir(DATA_FOLDER)
     if not files:
         return None
