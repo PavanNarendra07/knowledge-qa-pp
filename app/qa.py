@@ -83,27 +83,29 @@ def best_sentence(text, question):
     return candidates[0][2].strip()
 
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=10)
+    docs = db.similarity_search(question, k=8)
 
+    if not docs:
+        return "No relevant information found.", []
+
+    # strong keyword filtering
     q_words = [w.lower() for w in question.split() if len(w) > 2]
 
-    # keep docs strongly matching the question
-    filtered = []
+    valid_docs = []
     for d in docs:
         text = d.page_content.lower()
-        score = sum(1 for w in q_words if w in text)
 
-        if score >= max(1, len(q_words) // 2):
-            filtered.append((score, d))
+        # require most keywords to exist
+        matches = sum(1 for w in q_words if w in text)
 
-    # fallback if nothing matched
-    if not filtered:
-        filtered = [(1, d) for d in docs]
+        if matches >= max(1, len(q_words) - 1):
+            valid_docs.append(d)
 
-    # sort by keyword match
-    filtered.sort(key=lambda x: x[0], reverse=True)
+    if not valid_docs:
+        return "No relevant information found.", []
 
-    for _, d in filtered:
+    # extract best sentence
+    for d in valid_docs:
         sentence = best_sentence(d.page_content, question)
         if sentence:
             src = d.metadata.get("source", "Unknown")
