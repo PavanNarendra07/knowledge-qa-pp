@@ -3,7 +3,7 @@ import shutil
 import streamlit as st
 from qa import build_vector_store, ask_question
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_db():
     db = build_vector_store()
     return db
@@ -43,9 +43,9 @@ if uploaded_files:
     if os.path.exists(VECTOR_FOLDER):
         shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
-    st.cache_resource.clear()
-    with st.spinner("Rebuilding knowledge base..."):
-        db = load_db()
+    with st.spinner("Updating knowledge base..."):
+        st.cache_resource.clear()
+        load_db()
     st.success("Files uploaded successfully")
 
 st.subheader("Uploaded Documents")
@@ -63,9 +63,9 @@ if files:
             if os.path.exists(VECTOR_FOLDER):
                 shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
 
-            st.cache_resource.clear()
-            with st.spinner("Rebuilding knowledge base..."):
-                db = load_db()
+            with st.spinner("Updating knowledge base..."):
+                st.cache_resource.clear()
+                load_db()
             st.rerun()
 else:
     st.write("No documents uploaded yet.")
@@ -82,7 +82,7 @@ if st.button("Get Answer"):
     elif not question.strip():
         st.warning("Enter a question.")
     else:
-        with st.spinner("Rebuilding knowledge base..."):
+        with st.spinner("Generating answer..."):
             db = load_db()
         if db is None:
             st.error("Vector store not built.")
