@@ -43,7 +43,7 @@ def build_vector_store():
     docs = splitter.create_documents(texts, metadatas=metadata)
 
     embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6t-v2"
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
          
     )
 
