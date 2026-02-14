@@ -45,32 +45,40 @@ def select_best_answer(docs, question):
     if not docs:
         return "No relevant information found."
 
-    q = question.lower()
+    answer_parts = []
 
-    for d in docs:
-        text = d.page_content or ""
-        if q in text.lower():
-            return text[:250]
+    for d in docs[:3]:
+        text = d.page_content.strip()
+        if text:
+            answer_parts.append(text[:200])
 
-    return "No relevant information found."
+    return "\n\n".join(answer_parts)
 
 
 def ask_question(question, db):
-    docs  = db.similarity_search(question, k=5)
+    docs = db.similarity_search(question, k=5)
 
     response = select_best_answer(docs, question)
 
-    
+    words = question.lower().split()
     sources = []
     seen = set()
 
     for d in docs:
         text = d.page_content or ""
-        if question.lower() in text.lower():
+        lower_text = text.lower()
+
+        if all(w in lower_text for w in words):
             src = d.metadata.get("source", "unknown")
 
             if src not in seen:
-                sources.append((src, d.page_content[:200]))
+                sources.append((src, text[:200]))
                 seen.add(src)
+
+    if not sources and docs:
+        d = docs[0]
+        sources.append(
+            (d.metadata.get("source", "unknown"), d.page_content[:200])
+        )
 
     return response, sources
