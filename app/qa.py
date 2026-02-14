@@ -56,21 +56,29 @@ def select_best_answer(docs, question):
     return (docs[0].page_content or "")[:250]
 
 
-def extract_best_sentence(text, question):
-    # split sentences
-    sentences = re.split(r'(?<=[.!?]) +', text)
+def clean_text(s):
+    # remove wikipedia refs [1][2]
+    return re.sub(r"\[\d+\]", "", s).strip()
 
+
+def extract_best_sentence(text, question):
+    sentences = re.split(r'(?<=[.!?])\s+', text)
     q = question.lower()
 
-    # priority: birth questions
+    # --- birth question strict match ---
     if "born" in q or "birth" in q:
         for s in sentences:
             if "born" in s.lower():
-                # clean references like [1][2]
-                s = re.sub(r"\[\d+\]", "", s)
+                s = clean_text(s)
+
+                # cut text after birth info if extra text continues
+                match = re.search(r'.*born[^.]*\.', s, re.IGNORECASE)
+                if match:
+                    return match.group(0).strip()
+
                 return s.strip()
 
-    # fallback: keyword match
+    # --- generic keyword match ---
     words = q.split()
     best = None
     best_score = 0
@@ -84,8 +92,7 @@ def extract_best_sentence(text, question):
             best = s
 
     if best:
-        best = re.sub(r"\[\d+\]", "", best)
-        return best.strip()
+        return clean_text(best)
 
     return None
 
