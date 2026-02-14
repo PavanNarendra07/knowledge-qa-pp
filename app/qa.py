@@ -62,31 +62,61 @@ def load_vector_store():
     )
 
 
-def ask_question(question):
-    if not question.strip():
-        return "Please enter a valid question.", []
+import re
 
-    # Build store if missing
-    if not os.path.exists(VECTOR_FOLDER):
-        db = build_vector_store()
-        if db is None:
-            return "No documents available. Please upload documents first.", []
-    else:
-        db = load_vector_store()
 
-    docs = db.similarity_search(question, k=2)
+def clean_text(text):
+    return re.sub(r"\[\d+\]", "", text)
+
+
+def best_sentence(text, question):
+    text = clean_text(text)
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+
+    q_words = question.lower().split()
+    scored = []
+
+    for s in sentences:
+        s_lower = s.lower()
+        score = sum(1 for w in q_words if w in s_lower)
+
+        if score > 0:
+            scored.append((score, len(s), s))
+
+    if not scored:
+        return None
+
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return scored[0][2].strip()
+
+
+def ask_question(question, db):
+    docs = db.similarity_search(question, k=6)
 
     if not docs:
         return "No relevant information found.", []
 
-    context = "\n".join([d.page_content for d in docs])
+    q_lower = question.lower()
 
-    # Basic retrieval answer
-    response = context[:1000]
+    # prioritize docs whose filename matches query words
+    prioritized = []
+    others = []
 
-    sources = [
-        (d.metadata.get("source", "Unknown"), d.page_content[:200])
-        for d in docs
-    ]
+    for d in docs:
+        src = d.metadata.get("source", "").lower()
 
-    return response, sources
+        if any(word in src for word in q_lower.split()):
+            prioritized.append(d)
+        else:
+            others.append(d)
+
+    ordered_docs = prioritized + others
+
+    for d in ordered_docs:
+        sentence = best_sentence(d.page_content, question)
+
+        if sentence:
+            src = d.metadata.get("source", "Unknown")
+            return sentence, [(src, sentence)]
+
+    return "No relevant information found.", []
