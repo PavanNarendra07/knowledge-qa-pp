@@ -55,11 +55,8 @@ def select_best_answer(docs, question):
     # fallback to first
     return (docs[0].page_content or "")[:250]
 
-import re
-
 
 def clean_text(text):
-    # remove wiki refs like [1], [2]
     return re.sub(r"\[\d+\]", "", text)
 
 
@@ -68,7 +65,6 @@ def best_sentence(text, question):
     sentences = re.split(r'(?<=[.!?])\s+', text)
 
     q_words = question.lower().split()
-
     scored = []
 
     for s in sentences:
@@ -81,19 +77,33 @@ def best_sentence(text, question):
     if not scored:
         return None
 
-    # highest keyword match, shortest sentence
     scored.sort(key=lambda x: (-x[0], x[1]))
-
     return scored[0][2].strip()
 
 
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=4)
+    docs = db.similarity_search(question, k=6)
 
     if not docs:
         return "No relevant information found.", []
 
+    q_lower = question.lower()
+
+    # prioritize docs whose filename matches query words
+    prioritized = []
+    others = []
+
     for d in docs:
+        src = d.metadata.get("source", "").lower()
+
+        if any(word in src for word in q_lower.split()):
+            prioritized.append(d)
+        else:
+            others.append(d)
+
+    ordered_docs = prioritized + others
+
+    for d in ordered_docs:
         sentence = best_sentence(d.page_content, question)
 
         if sentence:
