@@ -28,5 +28,11 @@ The following types of prompts were used during development to guide implementat
 - Fix deployment environment errors
 - Prepare GitHub repository for submission
 
+###  Prompts
+- "Help me fix circular import error between app.py and qa.py"
+- "How to load PDF and DOCX files in Streamlit app?"
+- "Switch from OpenAI embeddings to free embeddings"
+- "Fix FAISS vector store loading error"
+
 ## Note
 Prompts were used mainly for debugging, architecture guidance, and improving implementation. All code was reviewed and tested manually before submission.
