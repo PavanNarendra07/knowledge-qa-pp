@@ -83,15 +83,20 @@ def best_sentence(text, question):
     return candidates[0][2].strip()
 
 def ask_question(question, db):
-    question_lower = question.lower()
-
     docs = db.similarity_search(question, k=10)
 
     if not docs:
         return "No relevant information found.", []
 
-    # keep important words only
-    q_words = [w for w in question_lower.split() if len(w) > 2]
+    stop_words = {"when", "what", "who", "is", "was", "the", "a", "an"}
+    q_words = [w.lower() for w in question.split() if w.lower() not in stop_words]
+
+    # handle born/birth variation
+    variants = set(q_words)
+    if "born" in variants:
+        variants.add("birth")
+    if "birth" in variants:
+        variants.add("born")
 
     for d in docs:
         sentences = re.split(r'(?<=[.!?])\s+', d.page_content)
@@ -99,8 +104,8 @@ def ask_question(question, db):
         for s in sentences:
             s_low = s.lower()
 
-            # require ALL words present
-            if all(w in s_low for w in q_words):
+            # require name match + born/birth
+            if all(w in s_low for w in variants if len(w) > 3):
                 src = d.metadata.get("source", "Unknown")
                 return s.strip(), [(src, s.strip())]
 
