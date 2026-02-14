@@ -57,67 +57,39 @@ def clean_text(text):
 
 def best_sentence(text, question):
     text = clean_text(text)
-
     sentences = re.split(r'(?<=[.!?])\s+', text)
+
     q_words = question.lower().split()
+    main_term = q_words[0] if q_words else ""
 
     candidates = []
 
     for s in sentences:
-        s_low = s.lower()
+        s_lower = s.lower()
 
-        score = sum(1 for w in q_words if w in s_low)
+        # must contain main entity
+        if main_term not in s_lower:
+            continue
 
-        # ignore useless long sentences
-        if score > 0 and 20 < len(s) < 250:
+        score = sum(1 for w in q_words if w in s_lower)
+
+        if score > 0:
             candidates.append((score, len(s), s))
 
     if not candidates:
         return None
 
-    # highest keyword match + shortest clean sentence
     candidates.sort(key=lambda x: (-x[0], x[1]))
-
     return candidates[0][2].strip()
 
+
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=8)
-
-    if not docs:
-        return "No relevant information found.", []
-
-    q = question.lower()
-
-    # patterns for factual answers
-    patterns = [
-        r"\(born[^)]*\)",          # born info
-        r"born\s+\d{1,2}.*\d{4}",  # born date
-        r"\d{4}",                  # year facts fallback
-    ]
+    docs = db.similarity_search(question, k=6)
 
     for d in docs:
-        text = clean_text(d.page_content)
-
-        lines = text.split("\n")
-
-        for line in lines:
-            l = line.strip()
-
-            # skip links & junk
-            if len(l) < 30 or "http" in l:
-                continue
-
-            for p in patterns:
-                if re.search(p, l.lower()):
-                    src = d.metadata.get("source", "Unknown")
-                    return l, [(src, l)]
-
-    # fallback best non-link line
-    for d in docs:
-        lines = d.page_content.split("\n")
-        for l in lines:
-            if len(l) > 30 and "http" not in l:
-                src = d.metadata.get("source", "Unknown")
-                return l.strip(), [(src, l.strip())]
+        sentence = best_sentence(d.page_content, question)
+        if sentence:
+            src = d.metadata.get("source", "Unknown")
+            return sentence, [(src, sentence)]
 
     return "No relevant information found.", []
