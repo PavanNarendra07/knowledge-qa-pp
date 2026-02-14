@@ -12,7 +12,8 @@ DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
-os.makedirs(VECTOR_FOLDER, exist_ok=True)
+if os.path.exists(VECTOR_FOLDER):
+    shutil.rmtree(VECTOR_FOLDER)
 
 @st.cache_resource
 def load_db():
