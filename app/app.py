@@ -13,10 +13,18 @@ VECTOR_FOLDER = "vectorstore"
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
-for f in os.listdir(DATA_FOLDER):
-    os.remove(os.path.join(DATA_FOLDER, f))
-if os.path.exists(VECTOR_FOLDER):
-    shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+def clear_old_data():
+    # clear files
+    for f in os.listdir(DATA_FOLDER):
+        path = os.path.join(DATA_FOLDER, f)
+        if os.path.isfile(path):
+            os.remove(path)
+
+    # clear vectorstore safely
+    if os.path.exists(VECTOR_FOLDER):
+        shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+
+clear_old_data()
 
 @st.cache_resource
 def load_db():
