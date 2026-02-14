@@ -65,12 +65,15 @@ if st.button("Get Answer"):
         st.warning("Enter a question.")
     else:
         db = load_db()
-        answer, sources = ask_question(question, db)
+        if db is None:
+            st.error("Vector store not built.")
+        else:
+            answer, sources = ask_question(question, db)
 
-        st.subheader("Answer")
-        st.write(answer)
+            st.subheader("Answer")
+            st.write(answer)
 
-        st.subheader("Sources")
-        for src, text in sources:
-            st.write(f"Document: {src}")
-            st.write(text)
+            st.subheader("Sources")
+            for src, text in sources:
+                st.write(f"Document: {src}")
+                st.write(text)
