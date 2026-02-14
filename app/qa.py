@@ -83,31 +83,33 @@ def best_sentence(text, question):
     return candidates[0][2].strip()
 
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=8)
+    question_lower = question.lower()
+
+    docs = db.similarity_search(question, k=10)
 
     if not docs:
         return "No relevant information found.", []
 
-    q_words = [w.lower() for w in question.split() if len(w) > 2]
+    q_words = [w for w in question_lower.split() if len(w) > 2]
 
-    best_doc = None
+    best_sentence_result = None
     best_score = 0
+    best_source = None
 
     for d in docs:
-        text = d.page_content.lower()
-        score = sum(1 for w in q_words if w in text)
+        sentences = re.split(r'(?<=[.!?])\s+', d.page_content)
 
-        if score > best_score:
-            best_score = score
-            best_doc = d
+        for s in sentences:
+            s_low = s.lower()
 
-    if best_doc is None or best_score == 0:
-        return "No relevant information found.", []
+            score = sum(1 for w in q_words if w in s_low)
 
-    sentence = best_sentence(best_doc.page_content, question)
+            if score > best_score:
+                best_score = score
+                best_sentence_result = s.strip()
+                best_source = d.metadata.get("source", "Unknown")
 
-    if sentence:
-        src = best_doc.metadata.get("source", "Unknown")
-        return sentence, [(src, sentence)]
+    if best_sentence_result and best_score > 0:
+        return best_sentence_result, [(best_source, best_sentence_result)]
 
     return "No relevant information found.", []
