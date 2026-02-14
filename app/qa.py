@@ -13,10 +13,15 @@ DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
 def build_vector_store():
+    if not os.path.exists(DATA_FOLDER):
+        return None
+    files = os.listdir(DATA_FOLDER)
+    if not files:
+        return None
     texts = []
     metadata = []
 
-    for file in os.listdir(DATA_FOLDER):
+    for file in files:
         path = os.path.join(DATA_FOLDER, file)
         content = read_file(path)
         texts.append(content)

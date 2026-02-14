@@ -102,7 +102,7 @@ if st.button("Get Answer"):
     elif not question.strip():
         st.warning("Please enter a question.")
     else:
-        db = load_db()
+        db = load_db() if os.listdir(DATA_FOLDER) else None
         answer, sources = ask_question(question, db)
 
         st.subheader("Answer")
