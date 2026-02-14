@@ -58,12 +58,13 @@ question = st.text_input("Enter your question")
 
 
 if st.button("Get Answer"):
-    db = load_db()
+    
     if not os.listdir(DATA_FOLDER):
         st.warning("Upload documents first.")
     elif not question.strip():
         st.warning("Enter a question.")
     else:
+        db = load_db()
         answer, sources = ask_question(question, db)
 
         st.subheader("Answer")
