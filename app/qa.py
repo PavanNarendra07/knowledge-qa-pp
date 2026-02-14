@@ -4,6 +4,8 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
