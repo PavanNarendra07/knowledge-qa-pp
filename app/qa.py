@@ -83,21 +83,27 @@ def best_sentence(text, question):
     return candidates[0][2].strip()
 
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=8)
+    docs = db.similarity_search(question, k=10)
 
-    q_lower = question.lower()
+    q_words = [w.lower() for w in question.split() if len(w) > 2]
 
-    # keep only docs containing query terms
-    filtered = [
-        d for d in docs
-        if all(word in d.page_content.lower()
-               for word in q_lower.split())
-    ]
+    # keep docs strongly matching the question
+    filtered = []
+    for d in docs:
+        text = d.page_content.lower()
+        score = sum(1 for w in q_words if w in text)
 
+        if score >= max(1, len(q_words) // 2):
+            filtered.append((score, d))
+
+    # fallback if nothing matched
     if not filtered:
-        filtered = docs  # fallback if nothing matched
+        filtered = [(1, d) for d in docs]
 
-    for d in filtered:
+    # sort by keyword match
+    filtered.sort(key=lambda x: x[0], reverse=True)
+
+    for _, d in filtered:
         sentence = best_sentence(d.page_content, question)
         if sentence:
             src = d.metadata.get("source", "Unknown")
