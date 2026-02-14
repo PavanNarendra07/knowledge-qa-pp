@@ -1,103 +1,98 @@
-from utils import read_file
-import os 
-import re
+import os
+import shutil
+import streamlit as st
+from qa import build_vector_store, ask_question
 
-from dotenv import load_dotenv
-load_dotenv()
-
-from langchain_text_splitters import CharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+@st.cache_resource(show_spinner=False)
+def load_db():
+    db = build_vector_store()
+    return db
 
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
-def build_vector_store():
+os.makedirs(DATA_FOLDER, exist_ok=True)
+
+
+if "init_done" not in st.session_state:
+    if os.path.exists(DATA_FOLDER):
+        shutil.rmtree(DATA_FOLDER, ignore_errors=True)
+    if os.path.exists(VECTOR_FOLDER):
+        shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+
     os.makedirs(DATA_FOLDER, exist_ok=True)
+    st.session_state.init_done = True
 
-    files = os.listdir(DATA_FOLDER)
-    if not files:
-        return None
-    texts = []
-    metadata = []
 
-    for file in files:
-        path = os.path.join(DATA_FOLDER, file)
-        content = read_file(path)
-        texts.append(content)
-        metadata.append({"source": file})
+st.set_page_config(page_title="Private Knowledge Q&A")
+st.title("📚 Private Knowledge Q&A")
+
+uploaded_files = st.file_uploader(
+    "Upload text files",
+    type=["txt"],
+    accept_multiple_files=True
+)
+
+os.makedirs(DATA_FOLDER, exist_ok=True)
+
+if uploaded_files:
+    for file in uploaded_files:
+        with open(os.path.join(DATA_FOLDER, file.name), "wb") as f:
+            f.write(file.getbuffer())
+
+    if os.path.exists(VECTOR_FOLDER):
+        shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+
+    with st.spinner("Updating knowledge base..."):
+        st.cache_resource.clear()
+        load_db()
+    st.success("Files uploaded successfully")
+
+st.subheader("Uploaded Documents")
+files = os.listdir(DATA_FOLDER)
+
+if files:
+    for f in files:
+        col1, col2 = st.columns([8,1])
+        col1.write(f)
+
+        if col2.button("❌", key=f):
+            os.remove(os.path.join(DATA_FOLDER, f))
+
+            # rebuild store after delete
+            if os.path.exists(VECTOR_FOLDER):
+                shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+
+            with st.spinner("Updating knowledge base..."):
+                st.cache_resource.clear()
+                load_db()
+            st.rerun()
+else:
+    st.write("No documents uploaded yet.")
+
+
+st.subheader("Ask a Question")
+question = st.text_input("Enter your question")
+
+
+if st.button("Get Answer"):
     
-    if not texts:
-        return None
-    splitter = CharacterTextSplitter(chunk_size= 300, chunk_overlap = 30, separator="\n")
-    docs = splitter.create_documents(texts, metadatas = metadata)
-    embeddings =  HuggingFaceEmbeddings(model_name= "sentence-transformers/all-MiniLM-L6-v2", 
-                                        model_kwargs={"device":"cpu"} ,
-                                        encode_kwargs={"normalize_embeddings": True})
-    db = FAISS.from_documents(docs,embeddings)
-    db.save_local(VECTOR_FOLDER)
+    if not os.listdir(DATA_FOLDER):
+        st.warning("Upload documents first.")
+    elif not question.strip():
+        st.warning("Enter a question.")
+    else:
+        with st.spinner("Generating answer..."):
+            db = load_db()
+        if db is None:
+            st.error("Vector store not built.")
+        else:
+            answer, sources = ask_question(question, db)
 
-    return db
+            st.subheader("Answer")
+            st.write(answer)
 
-def load_vector_store():
-    return build_vector_store()
-
-def select_best_answer(docs, question):
-    if not docs:
-        return "No relevant information found."
-
-    q = question.lower()
-
-    # prefer doc whose source matches query
-    for d in docs:
-        src = d.metadata.get("source", "").lower()
-        if any(word in src for word in q.split()):
-            return (d.page_content or "")[:250]
-
-    # fallback to first
-    return (docs[0].page_content or "")[:250]
-
-
-def clean_text(text):
-    # remove wiki refs like [1], [2]
-    return re.sub(r"\[\d+\]", "", text)
-
-
-def best_sentence(text, question):
-    text = clean_text(text)
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-
-    q_words = question.lower().split()
-
-    scored = []
-
-    for s in sentences:
-        s_lower = s.lower()
-        score = sum(1 for w in q_words if w in s_lower)
-
-        if score > 0:
-            scored.append((score, len(s), s))
-
-    if not scored:
-        return None
-
-    # highest keyword match, shortest sentence
-    scored.sort(key=lambda x: (-x[0], x[1]))
-
-    return scored[0][2].strip()
-
-
-def ask_question(question, db):
-    docs = db.similarity_search(question, k=4)
-
-    if not docs:
-        return "No relevant information found.", []
-
-    for d in docs:
-        sentence = best_sentence(d.page_content, question)
-
-        if sentence:
-            src = d.metadata.get("source", "Unknown")
-            return sentence, [(src, sentence)]
-
-    return "No relevant information found.", []
+            st.subheader("Sources")
+            for src, text in sources:
+                st.write(f"Document: {src}")
+                st.write(text)
