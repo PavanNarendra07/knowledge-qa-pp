@@ -51,37 +51,34 @@ def build_vector_store():
 
 import re
 
-
 def clean_text(text):
-    # remove wiki refs like [1], [2]
     return re.sub(r"\[\d+\]", "", text)
+
 
 def best_sentence(text, question):
     text = clean_text(text)
+
     sentences = re.split(r'(?<=[.!?])\s+', text)
+    q_words = question.lower().split()
 
-    q_lower = question.lower()
-
-    # Hard rule for birth questions
-    if "born" in q_lower:
-        for s in sentences:
-            if "born" in s.lower():
-                return s.strip()
-
-    # fallback scoring
-    q_words = q_lower.split()
-    best = None
-    best_score = 0
+    candidates = []
 
     for s in sentences:
-        s_lower = s.lower()
-        score = sum(1 for w in q_words if w in s_lower)
+        s_low = s.lower()
 
-        if score > best_score:
-            best_score = score
-            best = s
+        score = sum(1 for w in q_words if w in s_low)
 
-    return best.strip() if best else None
+        # ignore useless long sentences
+        if score > 0 and 20 < len(s) < 250:
+            candidates.append((score, len(s), s))
+
+    if not candidates:
+        return None
+
+    # highest keyword match + shortest clean sentence
+    candidates.sort(key=lambda x: (-x[0], x[1]))
+
+    return candidates[0][2].strip()
 
 
 def ask_question(question, db):
@@ -90,11 +87,26 @@ def ask_question(question, db):
     if not docs:
         return "No relevant information found.", []
 
+    best_answer = None
+    best_source = None
+    best_score = -1
+
+    q_words = question.lower().split()
+
     for d in docs:
         sentence = best_sentence(d.page_content, question)
 
-        if sentence:
-            src = d.metadata.get("source", "Unknown")
-            return sentence, [(src, sentence)]
+        if not sentence:
+            continue
+
+        score = sum(w in sentence.lower() for w in q_words)
+
+        if score > best_score:
+            best_score = score
+            best_answer = sentence
+            best_source = d.metadata.get("source", "Unknown")
+
+    if best_answer:
+        return best_answer, [(best_source, best_answer)]
 
     return "No relevant information found.", []
