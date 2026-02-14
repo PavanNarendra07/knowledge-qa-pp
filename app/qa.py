@@ -44,26 +44,30 @@ def load_vector_store():
 def select_best_answer(docs, question):
     if not docs:
         return "No relevant information found."
-    text = docs[0].page_content or ""
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
 
-    if not lines:
-        return "No relevant information found."
-    
-    return " ".join(lines)[:250]
+    answer_parts = []
+
+    for d in docs[:3]:
+        text = d.page_content.strip()
+        if text:
+            answer_parts.append(text[:200])
+
+    return "\n\n".join(answer_parts)
 
 
 def ask_question(question, db):
+    results = db.similarity_search_with_score(question, k=5)
 
-    docs = db.similarity_search(question, k=1)
+    docs = [doc for doc, score in results]
 
     response = select_best_answer(docs, question)
 
-    seen =set()
+    seen = set()
     sources = []
 
     for d in docs:
-        src = d.metadata["source"]
+        src = d.metadata.get("source", "unknown")
+
         if src not in seen:
             sources.append((src, d.page_content[:200]))
             seen.add(src)
