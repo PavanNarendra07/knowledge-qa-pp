@@ -58,6 +58,9 @@ def select_best_answer(docs, question):
 def ask_question(question, db):
     docs = db.similarity_search(question, k=5)
 
+    if not docs or question.lower() not in docs[0].page_content.lower():
+        return "No relevant information found.", []
+
     response = select_best_answer(docs, question)
 
     q_words = question.lower().split()
