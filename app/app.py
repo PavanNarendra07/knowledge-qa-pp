@@ -12,8 +12,7 @@ DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
-if os.path.exists(VECTOR_FOLDER):
-    shutil.rmtree(VECTOR_FOLDER)
+
 
 @st.cache_resource
 def load_db():
@@ -37,9 +36,13 @@ if uploaded_files:
     for file in uploaded_files:
         with open(os.path.join(DATA_FOLDER, file.name), "wb") as f:
             f.write(file.getbuffer())
-
+    if os.path.exists(VECTOR_FOLDER):
+        shutil.rmtree(VECTOR_FOLDER, ignore_errors=True)
+    st.cache_resource.clear()
+    db = build_vector_store()
     st.success("Files uploaded successfully")
-    db = load_db()
+    st.rerun()
+    
 
 # ===============================
 # Show Uploaded Files
