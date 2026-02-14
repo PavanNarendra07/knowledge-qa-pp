@@ -80,18 +80,20 @@ def best_sentence(text, question):
 
     return candidates[0][2].strip()
 
-
 def ask_question(question, db):
     docs = db.similarity_search(question, k=8)
 
     if not docs:
         return "No relevant information found.", []
 
-    q_words = question.lower().split()
+    q = question.lower()
 
-    best_line = None
-    best_source = None
-    best_score = -1
+    # patterns for factual answers
+    patterns = [
+        r"\(born[^)]*\)",          # born info
+        r"born\s+\d{1,2}.*\d{4}",  # born date
+        r"\d{4}",                  # year facts fallback
+    ]
 
     for d in docs:
         text = clean_text(d.page_content)
@@ -101,17 +103,21 @@ def ask_question(question, db):
         for line in lines:
             l = line.strip()
 
-            if len(l) < 20 or "http" in l:
+            # skip links & junk
+            if len(l) < 30 or "http" in l:
                 continue
 
-            score = sum(w in l.lower() for w in q_words)
+            for p in patterns:
+                if re.search(p, l.lower()):
+                    src = d.metadata.get("source", "Unknown")
+                    return l, [(src, l)]
 
-            if score > best_score:
-                best_score = score
-                best_line = l
-                best_source = d.metadata.get("source", "Unknown")
-
-    if best_line:
-        return best_line, [(best_source, best_line)]
+    # fallback best non-link line
+    for d in docs:
+        lines = d.page_content.split("\n")
+        for l in lines:
+            if len(l) > 30 and "http" not in l:
+                src = d.metadata.get("source", "Unknown")
+                return l.strip(), [(src, l.strip())]
 
     return "No relevant information found.", []
