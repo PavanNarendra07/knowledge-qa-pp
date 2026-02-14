@@ -55,34 +55,39 @@ def select_best_answer(docs, question):
     # fallback to first
     return (docs[0].page_content or "")[:250]
 
-def ask_question(question, db):
-    docs = db.similarity_search(question, k=5)
 
-    if not docs or question.lower() not in docs[0].page_content.lower():
+def ask_question(question, db):
+    docs = db.similarity_search(question, k=3)
+
+    if not docs:
         return "No relevant information found.", []
 
-    response = select_best_answer(docs, question)
-
     q_words = question.lower().split()
-
+    best_sentence = None
     sources = []
-    seen = set()
 
     for d in docs:
-        src = d.metadata.get("source", "")
-        lower_src = src.lower()
+        text = d.page_content
+        source = d.metadata.get("source", "Unknown")
 
-        if any(w in lower_src for w in q_words):
-            if src not in seen:
-                sources.append((src, (d.page_content or "")[:200]))
-                seen.add(src)
+        # split into sentences
+        sentences = re.split(r'(?<=[.!?]) +', text)
 
-    # fallback
-    if not sources and docs:
-        d = docs[0]
-        sources.append(
-            (d.metadata.get("source", "unknown"),
-             (d.page_content or "")[:200])
-        )
+        for sent in sentences:
+            low = sent.lower()
 
-    return response, sources
+            # check keyword overlap
+            score = sum(1 for w in q_words if w in low)
+
+            if score >= 2:  # threshold match
+                best_sentence = sent.strip()
+                sources.append((source, sent.strip()))
+                break
+
+        if best_sentence:
+            break
+
+    if not best_sentence:
+        return "No relevant information found.", []
+
+    return best_sentence, sources
