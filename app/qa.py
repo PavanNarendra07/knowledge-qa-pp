@@ -1,8 +1,6 @@
 from utils import read_file
 import os 
 import re
-from transformers import pipeline
-qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
 
 from dotenv import load_dotenv
 load_dotenv()
