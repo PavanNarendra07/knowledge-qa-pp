@@ -58,7 +58,7 @@ if st.button("Get Answer"):
     elif not question.strip():
         st.warning("Enter a question.")
     else:
-        answer, sources = ask_question(question)
+        answer, sources = ask_question(question, db)
 
         st.subheader("Answer")
         st.write(answer)
