@@ -4,6 +4,10 @@ import shutil
 import streamlit as st
 from qa import build_vector_store, ask_question
 
+@st.cache_resource
+def load_db():
+    return build_vector_store()
+
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
 
@@ -52,7 +56,9 @@ else:
 st.subheader("Ask a Question")
 question = st.text_input("Enter your question")
 
+
 if st.button("Get Answer"):
+    db = load_db()
     if not os.listdir(DATA_FOLDER):
         st.warning("Upload documents first.")
     elif not question.strip():
