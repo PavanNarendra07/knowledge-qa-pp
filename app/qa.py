@@ -44,8 +44,12 @@ def load_vector_store():
 def select_best_answer(docs, question):
     if not docs:
         return "No relevant information found."
-    text = docs[0].page_content
+    text = docs[0].page_content or ""
     lines = [line.strip() for line in text.split("\n") if line.strip()]
+
+    if not lines:
+        return "No relevant information found."
+    
     return " ".join(lines)[:250]
 
 
