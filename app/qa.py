@@ -49,59 +49,49 @@ def build_vector_store():
     return db
 
 
-# ---------- Clean best sentence ----------
+import re
+
+
+def clean_text(text):
+    # remove wiki refs like [1], [2]
+    return re.sub(r"\[\d+\]", "", text)
+
+
 def best_sentence(text, question):
-    sentences = re.split(r'(?<=[.!?]) +', text)
+    text = clean_text(text)
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+
     q_words = question.lower().split()
 
-    best_score = 0
-    best_line = sentences[0]
+    scored = []
 
     for s in sentences:
-        s_low = s.lower()
-        score = sum(word in s_low for word in q_words)
+        s_lower = s.lower()
+        score = sum(1 for w in q_words if w in s_lower)
 
-        if score > best_score:
-            best_score = score
-            best_line = s
+        if score > 0:
+            scored.append((score, len(s), s))
 
-    return best_line.strip()
+    if not scored:
+        return None
+
+    # highest keyword match, shortest sentence
+    scored.sort(key=lambda x: (-x[0], x[1]))
+
+    return scored[0][2].strip()
 
 
-# ---------- Select best answer ----------
-def select_best_answer(docs, question):
+def ask_question(question, db):
+    docs = db.similarity_search(question, k=4)
+
     if not docs:
         return "No relevant information found.", []
 
-    q_words = question.lower().split()
-
-    scored_docs = []
     for d in docs:
-        text = d.page_content.lower()
-        score = sum(word in text for word in q_words)
-        scored_docs.append((score, d))
+        sentence = best_sentence(d.page_content, question)
 
-    scored_docs.sort(key=lambda x: x[0], reverse=True)
+        if sentence:
+            src = d.metadata.get("source", "Unknown")
+            return sentence, [(src, sentence)]
 
-    best_doc = scored_docs[0][1]
-    answer_line = best_sentence(best_doc.page_content, question)
-
-    sources = []
-    for score, d in scored_docs[:2]:
-        sources.append(
-            (d.metadata.get("source", "Unknown"),
-             d.page_content[:250])
-        )
-
-    return answer_line, sources
-
-
-# ---------- Ask Question ----------
-def ask_question(question, db):
-    if db is None:
-        return "No documents available.", []
-
-    docs = db.similarity_search(question, k=4)
-    answer, sources = select_best_answer(docs, question)
-
-    return answer, sources
+    return "No relevant information found.", []
