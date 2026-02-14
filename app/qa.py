@@ -2,9 +2,7 @@ import os
 import re
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import FakeEmbeddings
-
-
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 DATA_FOLDER = "data"
 VECTOR_FOLDER = "vectorstore"
@@ -18,6 +16,9 @@ def read_file(path):
 
 # ---------- Build Vector Store ----------
 def build_vector_store():
+    if not os.path.exists(DATA_FOLDER):
+        return None
+
     files = os.listdir(DATA_FOLDER)
 
     texts = []
@@ -35,89 +36,72 @@ def build_vector_store():
         return None
 
     splitter = CharacterTextSplitter(
-        chunk_size=300,
-        chunk_overlap=40,
+        chunk_size=800,
+        chunk_overlap=100,
         separator="\n"
     )
 
     docs = splitter.create_documents(texts, metadatas=metadata)
 
-    embeddings = FakeEmbeddings(size=384)
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"}
+    )
+
     db = FAISS.from_documents(docs, embeddings)
     db.save_local(VECTOR_FOLDER)
 
     return db
 
 
-import re
-
+# ---------- Cleaning ----------
 def clean_text(text):
-    return re.sub(r"\[\d+\]", "", text)
+    text = re.sub(r"\[\d+\]", "", text)  # remove wiki refs
+    text = re.sub(r"http\S+", "", text)  # remove links
+    return text
 
 
+# ---------- Best Sentence ----------
 def best_sentence(text, question):
     text = clean_text(text)
 
     sentences = re.split(r'(?<=[.!?])\s+', text)
     q_words = question.lower().split()
 
-    candidates = []
+    best = None
+    best_score = 0
 
     for s in sentences:
         s_low = s.lower()
 
         score = sum(1 for w in q_words if w in s_low)
 
-        # ignore useless long sentences
-        if score > 0 and 20 < len(s) < 250:
-            candidates.append((score, len(s), s))
+        # ignore junk lines
+        if len(s) < 40:
+            continue
 
-    if not candidates:
-        return None
+        if score > best_score:
+            best_score = score
+            best = s
 
-    # highest keyword match + shortest clean sentence
-    candidates.sort(key=lambda x: (-x[0], x[1]))
+    return best
 
-    return candidates[0][2].strip()
 
+# ---------- Ask Question ----------
 def ask_question(question, db):
-    docs = db.similarity_search(question, k=8)
+    if db is None:
+        return "Upload documents first.", []
+
+    docs = db.similarity_search(question, k=6)
 
     if not docs:
         return "No relevant information found.", []
 
-    q = question.lower()
-
-    # patterns for factual answers
-    patterns = [
-        r"\(born[^)]*\)",          # born info
-        r"born\s+\d{1,2}.*\d{4}",  # born date
-        r"\d{4}",                  # year facts fallback
-    ]
-
     for d in docs:
-        text = clean_text(d.page_content)
+        answer = best_sentence(d.page_content, question)
 
-        lines = text.split("\n")
-
-        for line in lines:
-            l = line.strip()
-
-            # skip links & junk
-            if len(l) < 30 or "http" in l:
-                continue
-
-            for p in patterns:
-                if re.search(p, l.lower()):
-                    src = d.metadata.get("source", "Unknown")
-                    return l, [(src, l)]
-
-    # fallback best non-link line
-    for d in docs:
-        lines = d.page_content.split("\n")
-        for l in lines:
-            if len(l) > 30 and "http" not in l:
-                src = d.metadata.get("source", "Unknown")
-                return l.strip(), [(src, l.strip())]
+        if answer:
+            src = d.metadata.get("source", "Unknown")
+            return answer.strip(), [(src, answer.strip())]
 
     return "No relevant information found.", []
