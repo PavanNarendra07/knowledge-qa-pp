@@ -56,38 +56,52 @@ def select_best_answer(docs, question):
     return (docs[0].page_content or "")[:250]
 
 
+def extract_best_sentence(text, question):
+    # split sentences
+    sentences = re.split(r'(?<=[.!?]) +', text)
+
+    q = question.lower()
+
+    # priority: birth questions
+    if "born" in q or "birth" in q:
+        for s in sentences:
+            if "born" in s.lower():
+                # clean references like [1][2]
+                s = re.sub(r"\[\d+\]", "", s)
+                return s.strip()
+
+    # fallback: keyword match
+    words = q.split()
+    best = None
+    best_score = 0
+
+    for s in sentences:
+        low = s.lower()
+        score = sum(1 for w in words if w in low)
+
+        if score > best_score:
+            best_score = score
+            best = s
+
+    if best:
+        best = re.sub(r"\[\d+\]", "", best)
+        return best.strip()
+
+    return None
+
+
 def ask_question(question, db):
     docs = db.similarity_search(question, k=3)
 
     if not docs:
         return "No relevant information found.", []
 
-    q_words = question.lower().split()
-    best_sentence = None
-    sources = []
-
     for d in docs:
         text = d.page_content
         source = d.metadata.get("source", "Unknown")
 
-        # split into sentences
-        sentences = re.split(r'(?<=[.!?]) +', text)
+        answer = extract_best_sentence(text, question)
+        if answer:
+            return answer, [(source, answer)]
 
-        for sent in sentences:
-            low = sent.lower()
-
-            # check keyword overlap
-            score = sum(1 for w in q_words if w in low)
-
-            if score >= 2:  # threshold match
-                best_sentence = sent.strip()
-                sources.append((source, sent.strip()))
-                break
-
-        if best_sentence:
-            break
-
-    if not best_sentence:
-        return "No relevant information found.", []
-
-    return best_sentence, sources
+    return "No relevant information found.", []
